@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>text merge</title>
+    <style>
+        html, body {
+            padding: 0;
+            margin: 0;
+        }
+        .merge {
+            width: 100vw;
+            height: auto;
+        }
+
+        .merge-edits {
+            box-sizing: border-box;
+            padding: 10px;
+            width: 100%;
+            height: auto;
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        .merge-edit {
+            flex: 1;
+        }
+        .merge-edit:nth-child(1) {
+            margin-right: 10px;
+        }
+        .merge-diff {
+            box-sizing: border-box;
+            padding: 10px;
+            width: 100%;
+            height: auto;
+        }
+        .k-row {
+            width: 100%;
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .k-row .col:nth-child(1) {
+            border-right: 1px solid #d2d2d2;
+        }
+        .k-col {
+            flex: 1;
+            line-height: 2em;
+            min-height: 2em;
+            border-bottom: 1px solid #d2d2d2;
+            padding: 0 8px;
+        }
+
+        /* 对比样式 */
+        .replace {
+            background-color:#FD8
+        }
+        .delete {
+            background-color:#FDD;
+            text-decoration: line-through;
+        }
+        .insert {
+            background-color:#CFC
+        }
+        
+        .insertItem {
+            background-color: #50FF50;
+            text-decoration: none;
+        }
+        .deleteItem {
+            background-color: #fff;
+            color: #999;
+            text-decoration: line-through;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="merge">
+        <div class="merge-edits">
+            <textarea class="merge-edit" name="base" id="base" cols="30" rows="10"></textarea>
+            <textarea class="merge-edit" name="new" id="new" cols="30" rows="10"></textarea>
+        </div>
+        <div class="merge-diff" id="merge-diff"></div>
+        <button id="btn">提交</button>
+    </div>
+
+
+    <script src="https://libs.baidu.com/jquery/2.1.1/jquery.min.js"></script>
+    <script type="text/javascript" src="./difflib.js"></script>
+    <!-- <script type="text/javascript" src="./diffview.js"></script> -->
+    <script>
+        $(function() {
+            var input = $('#base');
+            var output = $('#new');
+            input.val("你好时间离开家师德师风大师傅!\r ok \n yes!\n ok fine");
+            output.val("你好时间离开家师abc德师风大师傅!\r ok \n ok fine\n helloworld");
+
+            $('#btn').click(function() {
+                merge({
+                    baseText: input.val(),
+                    newText: output.val(),
+                    targetId: 'merge-diff'
+                })
+            });
+            function ctelt (name, clazz, text) {
+                var e = document.createElement(name);
+                e.className = clazz;
+                e.appendChild(document.createTextNode(text));
+                return e;
+            }
+            function merge(params) {
+                params.baseText = params.baseText == undefined ? '' : params.baseText;
+                params.newText = params.newText == undefined ? '' : params.newText;
+                if (params.targetId == undefined) {console.warn('targetId is undefind');return;}
+                $('#'+params.targetId).empty();
+                var baseTxt = difflib.stringAsLines(params.baseText);
+                var newtxt = difflib.stringAsLines(params.newText);
+                // console.log('base:', baseTxt);
+                // console.log('new:', newtxt);
+                var diffSource = new difflib.SequenceMatcher(baseTxt, newtxt);
+                var opcodes = diffSource.get_opcodes();
+                for(var i = 0; i < opcodes.length; i++) {
+                    // console.log(opcodes[i])
+                    var code = opcodes[i], type = code[0], baseStart = code[1], baseEnd = code[2], newStart = code[3], newEnd = code[4];
+                    var rowCounts = Math.max(baseEnd - baseStart, newEnd - newStart);
+                    for(var n = 0; n < rowCounts; n++) {
+                        var row = $('<div class="k-row"></div>');
+                        var lineItem = {base: '', new: ''};
+                        if(type == 'insert') {
+                            lineItem.base = '<div class="col insert"></div>';
+                            lineItem.new = '<div class="col insert">' + newtxt[newStart++].replace(/\t/g, "\u00a0\u00a0\u00a0\u00a0")  + '</div>';
+                        }else if(type == 'replace') {
+                            // -----------------------------------------------------------------------------------------------------
+                            // sub
+                            var baseTextLine = baseTxt[baseStart];
+                            var newTextLine = newtxt[newStart] === undefined ? newtxt[newtxt.length-1] : newtxt[newStart];
+                            var wordrule = /([^\S]+|[a-zA-Z0-9_-]+|.)(?:(?!<)[^\S])?/;
+                            var bw = baseTextLine.split(wordrule);
+                            var nw = newTextLine.split(wordrule);
+                            var wsm = new difflib.SequenceMatcher(bw, nw);
+                            var wopcodes = wsm.get_opcodes();
+                            var bnode = document.createElement('span');
+                            var nnode = document.createElement('span');
+                            for (var k = 0; k < wopcodes.length; k++) {
+                                var wcode = wopcodes[k];
+                                var wchange = wcode[0];
+                                var wb = wcode[1];
+                                var wbe = wcode[2];
+                                var wn = wcode[3];
+                                var wne = wcode[4];
+                                var wcnt = Math.max(wbe - wb, wne - wn);
+                                for (var m = 0; m < wcnt; m++) {
+                                    if (wchange == "insert") {
+                                        nnode.appendChild(ctelt("span", "insertItem", nw[wn++]));
+                                    } else if (wchange == "replace") {
+                                        if (wb < wbe) bnode.appendChild(ctelt("del", "deleteItem", bw[wb++]));
+                                        if (wn < wne) nnode.appendChild(ctelt("ins", "insertItem", nw[wn++]));
+                                    } else if (wchange == "delete") {
+                                        bnode.appendChild(ctelt("span", "deleteItem", bw[wb++]));
+                                    } else {
+                                        // equal
+                                        bnode.appendChild(ctelt("span", wchange, bw[wb]));
+                                        nnode.appendChild(ctelt("span", wchange, bw[wb++]));
+                                    }
+                                }
+                            }
+                            if(baseStart < baseEnd) {
+                                lineItem.base = $('<div class="col replace"></div>').append(bnode);
+                                baseStart++
+                            } else {
+                                lineItem.base = '<div class="col replace"></div>';
+                            }
+                            if(newStart < newEnd) {
+                                lineItem.new = $('<div class="col replace"></div>').append(nnode)
+                                newStart++
+                            } else {
+                                lineItem.new = '<div class="col replace"></div>'
+                            }
+                            // -----------------------------------------------------------------------------------------------------                                               
+                        } else if (type == "delete") {
+                            lineItem.base = '<div class="col delete">' + baseTxt[baseStart++].replace(/\t/g, "\u00a0\u00a0\u00a0\u00a0")  + '</div>';
+                            lineItem.new = '<div class="col delete"></div>';
+                        } else {
+                            // equal
+                            lineItem.base = '<div class="col">' + baseTxt[baseStart++].replace(/\t/g, "\u00a0\u00a0\u00a0\u00a0")  + '</div>';
+                            lineItem.new = '<div class="col">' + newtxt[newStart++].replace(/\t/g, "\u00a0\u00a0\u00a0\u00a0")  + '</div>';
+                        }
+                        row.append(lineItem.base).append(lineItem.new)
+                        $('#'+params.targetId).append(row);
+                    }
+                }
+                return;
+            }
+        })
+        
+    </script>    
+</body>
+</html>
